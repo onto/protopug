@@ -262,6 +262,11 @@ namespace protopug
                 return read_size;
             }
 
+            size_t available_bytes() const
+            {
+                return _size_limit;
+            }
+
         private:
             reader &_parent;
             size_t _size_limit;
@@ -623,15 +628,16 @@ namespace protopug
             {
                 limited_reader limited_in(in, size);
 
-                do
+                while (limited_in.available_bytes() > 0)
                 {
                     std::pair<typename T::key_type, typename T::mapped_type> item;
                     if (!read_map_key_value<KeyFlags, ValueFlags>(item, limited_in))
-                        break;
+                    {
+                        return false;
+                    }
 
                     value.insert(std::move(item));
                 }
-                while (true);
 
                 return true;
             }
@@ -650,20 +656,17 @@ namespace protopug
                 {
                     limited_reader limited_in(in, size);
 
-                    do
+                    while (limited_in.available_bytes() > 0)
                     {
                         ValueType value;
-                        if (serializer<ValueType>::parse_packed(value, flags_t<Flags>(), limited_in))
+                        if (!serializer<ValueType>::parse_packed(value, flags_t<Flags>(), limited_in))
                         {
-                            output_it = value;
-                            ++output_it;
+                            return false;
                         }
-                        else
-                        {
-                            break;
-                        }
+
+                        output_it = value;
+                        ++output_it;
                     }
-                    while (true);
 
                     return true;
                 }
