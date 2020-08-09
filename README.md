@@ -34,16 +34,18 @@ namespace protopug
 
 int main()
 {
-      Message m{};
-      m.c = 1;
-      m.r.push_back(123);
-      m.r.push_back(456);
-      m.m[1] = 2;
-      m.m[2] = 3;
-      m.v.emplace<int64_t>(777);
-      m.os = "foo";
+    Message m{};
+    m.c = 1;
+    m.r.push_back(123);
+    m.r.push_back(456);
+    m.m[1] = 2;
+    m.m[2] = 3;
+    m.v.emplace<int64_t>(777);
+    m.os = "foo";
 
-      Message m1{};
-      protopug::parse_from_string(m1, protopug::serialize_as_string(m));
+    Message m1{};
+    protopug::parse_from_string(m1, protopug::serialize_as_string(m));
+    
+    return 0;
 }
 ```
