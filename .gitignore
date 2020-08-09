@@ -1,0 +1,6 @@
+*.o
+protoc
+protobuf
+Makefile
+.qmake.stash
+*.user
