@@ -206,14 +206,12 @@ namespace protopug
 
         uint32_t make_zigzag_value(int32_t value)
         {
-            uint32_t s_value = static_cast<uint32_t>(value);
-            return (s_value << 1) ^ (s_value >> 31);
+            return (static_cast<uint32_t>(value) << 1) ^ static_cast<uint32_t>(value >> 31);
         }
 
         uint64_t make_zigzag_value(int64_t value)
         {
-            uint64_t s_value = static_cast<uint64_t>(value);
-            return (s_value << 1) ^ (s_value >> 63);
+            return (static_cast<uint64_t>(value) << 1) ^ static_cast<uint64_t>(value >> 63);
         }
 
         int32_t read_zigzag_value(uint32_t value)
@@ -408,12 +406,12 @@ namespace protopug
 
         void write_signed_fixed(int32_t value, writer &out)
         {
-            write_fixed(make_zigzag_value(value), out);
+            write_fixed(static_cast<uint32_t>(value), out);
         }
 
         void write_signed_fixed(int64_t value, writer &out)
         {
-            write_fixed(make_zigzag_value(value), out);
+            write_fixed(static_cast<uint64_t>(value), out);
         }
 
         void write_tag_wire_type(uint32_t tag, WireType wire_type, writer &out)
@@ -510,7 +508,7 @@ namespace protopug
             uint32_t intermediate_value;
             if (read_fixed(intermediate_value, in))
             {
-                value = read_zigzag_value(intermediate_value);
+                value = static_cast<int64_t>(intermediate_value);
                 return true;
             }
             return false;
@@ -521,7 +519,7 @@ namespace protopug
             uint64_t intermediate_value;
             if (read_fixed(intermediate_value, in))
             {
-                value = read_zigzag_value(intermediate_value);
+                value = static_cast<int64_t>(intermediate_value);
                 return true;
             }
             return false;
