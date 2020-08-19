@@ -1,88 +1,117 @@
 #pragma once
 
-#include <string>
-#include <iostream>
-#include <utility>
-#include <cstddef>
 #include <cstring>
 #include <vector>
 #include <optional>
 #include <variant>
 #include <map>
 #include <cmath>
+#include <tuple>
 
 namespace protopug
 {
     namespace detail
     {
-        template<uint32_t Tag, class T, T, uint32_t Flags>
-        struct field_impl
+        template<class MemPtrT>
+        struct mem_ptr {};
+
+        template<class T, class U>
+        struct mem_ptr<U T::*>
         {
+            using type = T;
+            using member_type = U;
         };
 
-        template<uint32_t Tag, class T, class U, U T::*PtrToM, uint32_t Flags>
-        struct field_impl<Tag, U T::*, PtrToM, Flags>
+        template<class... Fields>
+        struct message_impl
         {
-            using type = U;
+        public:
+            message_impl(Fields &&...fields)
+                : _fields(std::move(fields)...)
+            {
+            }
+
+            template<class Handler>
+            void visit(Handler &&handler) const
+            {
+                visit_impl(std::forward<Handler>(handler), std::make_index_sequence<sizeof...(Fields)>());
+            }
+
+        private:
+            std::tuple<Fields...> _fields;
+
+            template<class Handler, size_t... I>
+            void visit_impl(Handler &&handler, std::index_sequence<I...>) const
+            {
+                (handler(std::get<I>(_fields)), ...);
+            }
+        };
+
+        template<uint32_t Tag, class MemPtrT, MemPtrT MemPtr, uint32_t Flags>
+        struct field_impl
+        {
+            using type = typename detail::mem_ptr<MemPtrT>::type;
+            using member_type = typename detail::mem_ptr<MemPtrT>::member_type;
+
             constexpr static const uint32_t tag = Tag;
             constexpr static const uint32_t flags = Flags;
 
-            static decltype(auto) get(const T &value)
+            const std::string field_name;
+
+            static decltype(auto) get(const type &value)
             {
-                return value.*PtrToM;
+                return value.*MemPtr;
             }
 
-            static decltype(auto) get(T &value)
+            static decltype(auto) get(type &value)
             {
-                return value.*PtrToM;
+                return value.*MemPtr;
             }
         };
 
-        template<uint32_t Tag, size_t Index, class T, T, uint32_t Flags>
+        template<uint32_t Tag, size_t Index, class MemPtrT, MemPtrT MemPtr, uint32_t Flags>
         struct oneof_field_impl
         {
-        };
+            using type = typename detail::mem_ptr<MemPtrT>::type;
+            using member_type = typename detail::mem_ptr<MemPtrT>::member_type;
 
-        template<uint32_t Tag, size_t Index, class T, class U, U T::*PtrToM, uint32_t Flags>
-        struct oneof_field_impl<Tag, Index, U T::*, PtrToM, Flags>
-        {
-            using type =  U;
             constexpr static const uint32_t tag = Tag;
             constexpr static const size_t index = Index;
             constexpr static const uint32_t flags = Flags;
 
-            static decltype(auto) get(const T &value)
+            const std::string field_name;
+
+            static decltype(auto) get(const type &value)
             {
-                return value.*PtrToM;
+                return value.*MemPtr;
             }
 
-            static decltype(auto) get(T &value)
+            static decltype(auto) get(type &value)
             {
-                return value.*PtrToM;
+                return value.*MemPtr;
             }
         };
 
-        template<uint32_t Tag, class T, T, uint32_t KeyFlags, uint32_t ValueFlags>
+        template<uint32_t Tag, class MemPtrT, MemPtrT MemPtr, uint32_t KeyFlags, uint32_t ValueFlags>
         struct map_field_impl
         {
-        };
+            using type = typename detail::mem_ptr<MemPtrT>::type;
+            using member_type = typename detail::mem_ptr<MemPtrT>::member_type;
 
-        template<uint32_t Tag, class T, class U, U T::*PtrToM, uint32_t KeyFlags, uint32_t ValueFlags>
-        struct map_field_impl<Tag, U T::*, PtrToM, KeyFlags, ValueFlags>
-        {
-            using type =  U;
             constexpr static const uint32_t tag = Tag;
             constexpr static const uint32_t key_flags = KeyFlags;
             constexpr static const uint32_t value_flags = ValueFlags;
 
-            static decltype(auto) get(const T &value)
+            const std::string field_name;
+
+            static decltype(auto) get(const type &value)
             {
-                return value.*PtrToM;
+                return value.*MemPtr;
             }
 
-            static decltype(auto) get(T &value)
+            static decltype(auto) get(type &value)
             {
-                return value.*PtrToM;
+                return value.*MemPtr;
             }
         };
     }
@@ -131,22 +160,42 @@ namespace protopug
     {
         static_assert(sizeof(T) == 0, "You need to implement descriptor for your own types");
 
-        using type = void;
+        static void type()
+        {
+
+        }
     };
 
     template<class... Fields>
-    struct message
+    constexpr auto message(Fields &&...fields)
     {
-    };
+        return detail::message_impl<Fields...>(std::forward<Fields>(fields)...);
+    }
 
-    template<uint32_t Tag, auto Arg, uint32_t Flags = flags::no>
-    using field = detail::field_impl<Tag, decltype(Arg), Arg, Flags>;
+    template<uint32_t Tag, auto MemPtr, uint32_t Flags = flags::no>
+    constexpr auto field(const std::string &field_name)
+    {
+        return detail::field_impl<Tag, decltype(MemPtr), MemPtr, Flags> {field_name};
+    }
 
-    template<uint32_t Tag, size_t Index, auto Arg, uint32_t Flags = flags::no>
-    using oneof_field = detail::oneof_field_impl<Tag, Index, decltype(Arg), Arg, Flags>;
+    template<uint32_t Tag, size_t Index, auto MemPtr, uint32_t Flags = flags::no>
+    constexpr auto oneof_field(const std::string &field_name)
+    {
+        return detail::oneof_field_impl<Tag, Index, decltype(MemPtr), MemPtr, Flags> {field_name};
+    }
 
-    template<uint32_t Tag, auto Arg, uint32_t KeyFlags = flags::no, uint32_t ValueFlags = flags::no>
-    using map_field = detail::map_field_impl<Tag, decltype(Arg), Arg, KeyFlags, ValueFlags>;
+    template<uint32_t Tag, auto MemPtr, uint32_t KeyFlags = flags::no, uint32_t ValueFlags = flags::no>
+    constexpr auto map_field(const std::string &field_name)
+    {
+        return detail::map_field_impl<Tag, decltype(MemPtr), MemPtr, KeyFlags, ValueFlags> {field_name};
+    }
+
+    template<class T>
+    const auto &message_type()
+    {
+        static const auto message = descriptor<T>::type();
+        return message;
+    }
 
     template<class T, class Enable = void>
     struct serializer;
@@ -160,12 +209,6 @@ namespace protopug
     {
         virtual size_t read(void *bytes, size_t size) = 0;
     };
-
-    template<class T>
-    void write_message(const T &value, writer &out);
-
-    template<class T>
-    bool read_message(T &value, reader &in);
 
     namespace detail
     {
@@ -525,32 +568,36 @@ namespace protopug
             return false;
         }
 
-        template<class T, uint32_t Tag, size_t Index, auto Arg, uint32_t Flags>
-        void write_field(const T &value, oneof_field<Tag, Index, Arg, Flags>, writer &out)
+        template<class T, uint32_t Tag, size_t Index, class MemPtrT, MemPtrT MemPtr, uint32_t Flags>
+        void write_field(const T &value, const detail::oneof_field_impl<Tag, Index, MemPtrT, MemPtr, Flags> &/*field*/, writer &out)
         {
-            using OneOf = oneof_field<Tag, Index, Arg, Flags>;
-            serializer<typename OneOf::type>::template serialize_oneof<OneOf::index>(OneOf::tag, OneOf::get(value), flags_t<OneOf::flags>(), out);
-        }
-
-        template<class T, uint32_t Tag, auto Arg, uint32_t KeyFlags, uint32_t ValueFlags>
-        void write_field(const T &value, map_field<Tag, Arg, KeyFlags, ValueFlags>, writer &out)
-        {
-            using Field = map_field<Tag, Arg, KeyFlags, ValueFlags>;
-            serializer<typename Field::type>::serialize_map(Field::tag, Field::get(value), flags_t<Field::key_flags>(), flags_t<Field::value_flags>(),
+            using OneOf = detail::oneof_field_impl<Tag, Index, MemPtrT, MemPtr, Flags>;
+            serializer<typename OneOf::member_type>::template serialize_oneof<OneOf::index>(OneOf::tag, OneOf::get(value), flags_t<OneOf::flags>(),
                     out);
         }
 
-        template<class T, uint32_t Tag, auto Arg, uint32_t Flags>
-        void write_field(const T &value, field<Tag, Arg, Flags>, writer &out)
+        template<class T, uint32_t Tag, class MemPtrT, MemPtrT MemPtr, uint32_t KeyFlags, uint32_t ValueFlags>
+        void write_field(const T &value, const detail::map_field_impl<Tag, MemPtrT, MemPtr, KeyFlags, ValueFlags> &/*field*/, writer &out)
         {
-            using Field = field<Tag, Arg, Flags>;
-            serializer<typename Field::type>::serialize(Field::tag, Field::get(value), flags_t<Field::flags>(), out);
+            using Map = detail::map_field_impl<Tag, MemPtrT, MemPtr, KeyFlags, ValueFlags>;
+            serializer<typename Map::member_type>::serialize_map(Map::tag, Map::get(value), flags_t<Map::key_flags>(), flags_t<Map::value_flags>(),
+                    out);
+        }
+
+        template<class T, uint32_t Tag, class MemPtrT, MemPtrT MemPtr, uint32_t Flags>
+        void write_field(const T &value, const detail::field_impl<Tag, MemPtrT, MemPtr, Flags> &/*field*/, writer &out)
+        {
+            using Field = detail::field_impl<Tag, MemPtrT, MemPtr, Flags>;
+            serializer<typename Field::member_type>::serialize(Field::tag, Field::get(value), flags_t<Field::flags>(), out);
         }
 
         template<class T, class... Field>
-        void write_message(const T &value, message<Field...>, writer &out)
+        void write_message(const T &value, const detail::message_impl<Field...> &message, writer &out)
         {
-            (write_field(value, Field(), out), ...);
+            message.visit([&](const auto & field)
+            {
+                write_field(value, field, out);
+            });
         }
 
         template<uint32_t Flags, class ValueType, class It>
@@ -612,8 +659,11 @@ namespace protopug
         template<uint32_t KeyFlags, uint32_t ValueFlags, class Key, class Value>
         bool read_map_key_value(std::pair<Key, Value> &value, reader &in)
         {
-            using PairAsMessage = message<field<1, &std::pair<Key, Value>::first, KeyFlags>, field<2, &std::pair<Key, Value>::second, ValueFlags>>;
-            return read_message(value, PairAsMessage(), in);
+            static const auto pair_as_message = message(
+                                               field<1, &std::pair<Key, Value>::first, KeyFlags>("key"),
+                                               field<2, &std::pair<Key, Value>::second, ValueFlags>("value")
+                                           );
+            return read_message(value, pair_as_message, in);
         }
 
         template<uint32_t KeyFlags, uint32_t ValueFlags, class T>
@@ -685,35 +735,37 @@ namespace protopug
             }
         }
 
-        template<class T, uint32_t Tag, size_t Index, auto Arg, uint32_t Flags>
-        void read_field(T &value, uint32_t tag, WireType wire_type, oneof_field<Tag, Index, Arg, Flags>, reader &in)
+        template<class T, uint32_t Tag, size_t Index, class MemPtrT, MemPtrT MemPtr, uint32_t Flags>
+        void read_field(T &value, uint32_t tag, WireType wire_type, const detail::oneof_field_impl<Tag, Index, MemPtrT, MemPtr, Flags> &/*field*/,
+                        reader &in)
         {
             if (Tag != tag) return;
 
-            using OneOf = oneof_field<Tag, Index, Arg, Flags>;
-            serializer<typename OneOf::type>::template parse_oneof<OneOf::index>(wire_type, OneOf::get(value), flags_t<OneOf::flags>(), in);
+            using OneOf = detail::oneof_field_impl<Tag, Index, MemPtrT, MemPtr, Flags>;
+            serializer<typename OneOf::member_type>::template parse_oneof<OneOf::index>(wire_type, OneOf::get(value), flags_t<OneOf::flags>(), in);
         }
 
-        template<class T, uint32_t Tag, auto Arg, uint32_t KeyFlags, uint32_t ValueFlags>
-        void read_field(T &value, uint32_t tag, WireType wire_type, map_field<Tag, Arg, KeyFlags, ValueFlags>, reader &in)
+        template<class T, uint32_t Tag, class MemPtrT, MemPtrT MemPtr, uint32_t KeyFlags, uint32_t ValueFlags>
+        void read_field(T &value, uint32_t tag, WireType wire_type, const detail::map_field_impl<Tag, MemPtrT, MemPtr, KeyFlags, ValueFlags> &/*field*/,
+                        reader &in)
         {
             if (Tag != tag) return;
 
-            using Field = map_field<Tag, Arg, KeyFlags, ValueFlags>;
-            serializer<typename Field::type>::parse_map(wire_type, Field::get(value), flags_t<Field::key_flags>(), flags_t<Field::value_flags>(), in);
+            using Map = detail::map_field_impl<Tag, MemPtrT, MemPtr, KeyFlags, ValueFlags>;
+            serializer<typename Map::member_type>::parse_map(wire_type, Map::get(value), flags_t<Map::key_flags>(), flags_t<Map::value_flags>(), in);
         }
 
-        template<class T, uint32_t Tag, auto Arg, uint32_t Flags>
-        void read_field(T &value, uint32_t tag, WireType wire_type, field<Tag, Arg, Flags>, reader &in)
+        template<class T, uint32_t Tag, class MemPtrT, MemPtrT MemPtr, uint32_t Flags>
+        void read_field(T &value, uint32_t tag, WireType wire_type, const detail::field_impl<Tag, MemPtrT, MemPtr, Flags> &/*field*/, reader &in)
         {
             if (Tag != tag) return;
 
-            using Field = field<Tag, Arg, Flags>;
-            serializer<typename Field::type>::parse(wire_type, Field::get(value), flags_t<Field::flags>(), in);
+            using Field = detail::field_impl<Tag, MemPtrT, MemPtr, Flags>;
+            serializer<typename Field::member_type>::parse(wire_type, Field::get(value), flags_t<Field::flags>(), in);
         }
 
         template<class T, class... Field>
-        bool read_message(T &value, message<Field...>, reader &in)
+        bool read_message(T &value, const message_impl<Field...> &message, reader &in)
         {
             uint32_t tag_key;
             while (read_varint(tag_key, in))
@@ -723,25 +775,14 @@ namespace protopug
 
                 read_tag_wire_type(tag_key, tag, wire_type);
 
-                (read_field(value, tag, wire_type, Field(), in), ...);
+                message.visit([&](const auto & field)
+                {
+                    read_field(value, tag, wire_type, field, in);
+                });
             }
 
             return true;
         }
-    }
-
-    template<class T>
-    void write_message(const T &value, writer &out)
-    {
-        using Message = typename descriptor<T>::type;
-        detail::write_message(value, Message(), out);
-    }
-
-    template<class T>
-    bool read_message(T &value, reader &in)
-    {
-        using Message = typename descriptor<T>::type;
-        return detail::read_message(value, Message(), in);
     }
 
     template<class T, class Enable>
@@ -751,13 +792,13 @@ namespace protopug
         static void serialize(uint32_t tag, const T &value, flags_t<>, writer &out, bool force = false)
         {
             detail::writer_size_collector size_collector;
-            write_message(value, size_collector);
+            detail::write_message(value, message_type<T>(), size_collector);
 
             if (!force && size_collector.byte_size == 0) return;
 
             detail::write_tag_wire_type(tag, WireType::LengthDelimeted, out);
             detail::write_varint(size_collector.byte_size, out);
-            write_message(value, out);
+            detail::write_message(value, message_type<T>(), out);
         }
 
         static bool parse(WireType wire_type, T &value, flags_t<>, reader &in)
@@ -768,7 +809,7 @@ namespace protopug
             if (detail::read_varint(size, in))
             {
                 detail::limited_reader limited_in(in, size);
-                return read_message(value, limited_in);
+                return detail::read_message(value, message_type<T>(), limited_in);
             }
 
             return false;
@@ -1298,7 +1339,7 @@ namespace protopug
     void serialize_to_string(const T &value, std::string &out)
     {
         string_writer string_out(out);
-        write_message(value, string_out);
+        detail::write_message(value, message_type<T>(), string_out);
     }
 
     template <class T>
@@ -1313,7 +1354,8 @@ namespace protopug
     bool parse_from_string(T &value, const std::string &in)
     {
         string_reader string_in(in);
-        return read_message(value, string_in);
+        return detail::read_message(value, message_type<T>(), string_in);
+    }
     }
 }
 

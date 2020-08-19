@@ -21,14 +21,17 @@ namespace protopug
     template<>
     struct descriptor<Message>
     {
-        using type = message<
-                         field<1, &Message::c>,
-                         field<2, &Message::r>,
-                         map_field<3, &Message::m>,
-                         oneof_field<4, 0, &Message::v>,
-                         oneof_field<5, 1, &Message::v>,
-                         field<6, &Message::os>
-                     >;
+        static auto type()
+        {
+            return message(
+                        field<1, &Message::c>("c"),
+                        field<2, &Message::r>("r"),
+                        map_field<3, &Message::m>("m"),
+                        oneof_field<4, 0, &Message::v>("v_32"),
+                        oneof_field<5, 1, &Message::v>("v_64"),
+                        field<6, &Message::os>("os")
+                   );
+        }
     };
 }
 
