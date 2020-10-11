@@ -7,6 +7,8 @@
 #include <map>
 #include <cmath>
 #include <tuple>
+#include <cstdint>
+#include <string>
 
 namespace protopug
 {
@@ -325,40 +327,40 @@ namespace protopug
 
         void write_varint(uint32_t value, writer &out)
         {
-            do
+            uint8_t b[5]{};
+            for (size_t i = 0; i < 5; ++i)
             {
-                uint8_t x = value & 0b0111'1111;
+                b[i] = value & 0b0111'1111;
                 value >>= 7;
                 if (value)
                 {
-                    write_byte(x | 0b1000'0000, out);
+                    b[i] |= 0b1000'0000;
                 }
                 else
                 {
-                    write_byte(x, out);
+                    out.write(b, i + 1);
                     break;
                 }
             }
-            while (true);
         }
 
         void write_varint(uint64_t value, writer &out)
         {
-            do
+            uint8_t b[10]{};
+            for (size_t i = 0; i < 10; ++i)
             {
-                uint8_t x = value & 0b0111'1111;
+                b[i] = value & 0b0111'1111;
                 value >>= 7;
                 if (value)
                 {
-                    write_byte(x | 0b1000'0000, out);
+                    b[i] |= 0b1000'0000;
                 }
                 else
                 {
-                    write_byte(x, out);
+                    out.write(b, i + 1);
                     break;
                 }
             }
-            while (true);
         }
 
         bool read_varint(uint32_t &value, reader &in)
@@ -1355,7 +1357,6 @@ namespace protopug
     {
         string_reader string_in(in);
         return detail::read_message(value, message_type<T>(), string_in);
-    }
     }
 }
 
